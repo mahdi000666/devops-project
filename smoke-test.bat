@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 set URL=%1
 if "%URL%"=="" set URL=http://localhost:8080
 
-set MAX_RETRIES=15
+set MAX_RETRIES=3
 set RETRY=0
 
 echo ===================================
