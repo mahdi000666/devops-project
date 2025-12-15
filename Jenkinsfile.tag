@@ -65,7 +65,7 @@ pipeline {
                     
                     // Run container
                     bat "docker run -d -p 8080:80 --name ${containerName} ${imageName}"
-                    bat 'timeout /t 5 /nobreak'
+                    bat 'ping 127.0.0.1 -n 6 > nul'
                     
                     echo "✓ Release ${tag} running at http://localhost:8080"
                 }
