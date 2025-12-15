@@ -3,6 +3,11 @@ import './index.css';
 
 function App() {
   const [count, setCount] = useState(0);
+  
+  // Add Reset Feature
+  const handleReset = () => {
+    setCount(0);
+  };
 
   return (
     <div className="container">
@@ -11,6 +16,13 @@ function App() {
       <div className="card">
         <button onClick={() => setCount(c => c + 1)}>
           Count: {count}
+        </button>
+        <button 
+          onClick={handleReset}
+          className="reset-btn"
+          disabled={count === 0}
+        >
+          Reset
         </button>
       </div>
       <p className="info">
