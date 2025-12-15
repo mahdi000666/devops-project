@@ -3,11 +3,14 @@ import './index.css';
 
 function App() {
   const [count, setCount] = useState(0);
-  
-  // Add Reset Feature
+
+  // Missing closing parenthesis - Syntax Error
   const handleReset = () => {
-    setCount(0);
+    setCount(0;
   };
+
+  // Undefined variable reference - Reference Error
+  const undefinedVariable = nonExistentVariable;
 
   return (
     <div className="container">
@@ -28,8 +31,10 @@ function App() {
       <p className="info">
         Jenkins + Docker + Git Pipeline Demo
       </p>
+      {/* JSX comment without proper closing */}
+      <div>
+        This div is not properly closed
     </div>
-  );
-}
+  ); // Missing closing brace for App function
 
 export default App;
