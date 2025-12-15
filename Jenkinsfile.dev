@@ -1,0 +1,143 @@
+pipeline {
+    agent any
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "=== Dev Pipeline: Checkout ==="
+                checkout scm
+            }
+        }
+        
+        stage('Setup') {
+            steps {
+                echo "=== Dev Pipeline: Setup ==="
+                bat 'npm ci --prefer-offline'
+            }
+        }
+        
+        stage('Build (Parallel)') {
+            parallel {
+                stage('Build Node 18') {
+                    steps {
+                        script {
+                            echo "=== Building with Node 18 ==="
+                            def commit = env.GIT_COMMIT.take(7)
+                            def imageName = "react-dev-node18:${commit}"
+                            
+                            bat "docker rmi ${imageName} 2>nul || exit 0"
+                            bat "docker build --build-arg NODE_VERSION=18 -t ${imageName} ."
+                            echo "✓ Node 18 build complete"
+                        }
+                    }
+                }
+                stage('Build Node 20') {
+                    steps {
+                        script {
+                            echo "=== Building with Node 20 ==="
+                            def commit = env.GIT_COMMIT.take(7)
+                            def imageName = "react-dev-node20:${commit}"
+                            
+                            bat "docker rmi ${imageName} 2>nul || exit 0"
+                            bat "docker build --build-arg NODE_VERSION=20 -t ${imageName} ."
+                            echo "✓ Node 20 build complete"
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Run Docker') {
+            steps {
+                script {
+                    echo "=== Dev Pipeline: Run Docker ==="
+                    def commit = env.GIT_COMMIT.take(7)
+                    def imageName = "react-dev-node20:${commit}"
+                    def containerName = "react_dev_${BUILD_NUMBER}"
+                    
+                    // Cleanup port 8080
+                    bat """
+                        @echo off
+                        echo Cleaning port 8080...
+                        for /f "tokens=*" %%i in ('docker ps --format "{{.Names}}"') do (
+                            docker port %%i 2^>nul | findstr ":8080" >nul
+                            if !errorlevel! == 0 (
+                                docker stop %%i 2^>nul
+                                docker rm -f %%i 2^>nul
+                            )
+                        )
+                        
+                        for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8080 " ^| findstr "LISTENING" 2^>nul') do (
+                            taskkill /F /PID %%p 2>nul
+                        )
+                        
+                        docker rm -f ${containerName} 2>nul || exit 0
+                        timeout /t 2 /nobreak
+                        exit 0
+                    """
+                    
+                    // Run container
+                    bat "docker run -d -p 8080:80 --name ${containerName} ${imageName}"
+                    bat 'timeout /t 5 /nobreak'
+                    
+                    echo "✓ Dev container running at http://localhost:8080"
+                }
+            }
+        }
+        
+        stage('Smoke Test') {
+            steps {
+                echo "=== Dev Pipeline: Smoke Test ==="
+                bat 'call smoke-test.bat http://localhost:8080'
+                archiveArtifacts artifacts: 'smoke.log', allowEmptyArchive: true
+            }
+        }
+        
+        stage('Archive Artifacts') {
+            steps {
+                echo "=== Dev Pipeline: Archive Artifacts ==="
+                bat 'echo Dev Build %BUILD_NUMBER% > build.log'
+                archiveArtifacts artifacts: 'dist/**,build.log', allowEmptyArchive: true
+            }
+        }
+        
+        stage('Cleanup') {
+            steps {
+                script {
+                    echo "=== Dev Pipeline: Cleanup ==="
+                    def containerName = "react_dev_${BUILD_NUMBER}"
+                    
+                    bat "docker stop ${containerName} 2>nul || exit 0"
+                    bat "docker rm ${containerName} 2>nul || exit 0"
+                    
+                    // Clean old dev images (keep last 3)
+                    bat """
+                        @echo off
+                        for /f "skip=3 delims=" %%a in ('docker images react-dev-node18 --format "{{.Repository}}:{{.Tag}}" 2^>nul') do (
+                            docker rmi %%a 2>nul
+                        )
+                        for /f "skip=3 delims=" %%a in ('docker images react-dev-node20 --format "{{.Repository}}:{{.Tag}}" 2^>nul') do (
+                            docker rmi %%a 2>nul
+                        )
+                        exit 0
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "✓ Dev pipeline PASSED"
+            echo "✓ Both Node 18 and Node 20 builds successful"
+        }
+        failure {
+            echo "✗ Dev pipeline FAILED"
+        }
+    }
+}
