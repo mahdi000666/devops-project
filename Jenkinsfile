@@ -2,6 +2,7 @@
 
 def isPR = env.CHANGE_ID != null
 def isDev = env.BRANCH_NAME == 'dev'
+def isMain = env.BRANCH_NAME == 'main'
 def isTag = env.TAG_NAME != null
 
 pipeline {
@@ -20,6 +21,8 @@ pipeline {
                         echo "=== RUNNING TAG PIPELINE (${env.TAG_NAME}) ==="
                     } else if (isPR) {
                         echo "=== RUNNING PR PIPELINE (PR-${env.CHANGE_ID}) ==="
+                    } else if (isMain) {
+                        echo "=== RUNNING MAIN PIPELINE ==="
                     } else if (isDev) {
                         echo "=== RUNNING DEV PIPELINE ==="
                     } else {
@@ -85,6 +88,10 @@ pipeline {
                         def commit = env.GIT_COMMIT.take(7)
                         imageName = "react-pr:${prNumber}-${commit}"
                         containerName = "react_pr_${prNumber}_${BUILD_NUMBER}"
+                    } else if (isMain) {
+                        def commit = env.GIT_COMMIT.take(7)
+                        imageName = "react-main:${commit}"
+                        containerName = "react_main_${BUILD_NUMBER}"
                     } else if (isDev) {
                         def commit = env.GIT_COMMIT.take(7)
                         imageName = "react-dev-node20:${commit}"
@@ -113,8 +120,8 @@ pipeline {
                         exit 0
                     """
                     
-                    // Build image if not already built (for tag/PR)
-                    if (isTag || isPR) {
+                    // Build image if not already built (for tag/PR/main)
+                    if (isTag || isPR || isMain) {
                         bat "docker rmi ${imageName} 2>nul || exit 0"
                         bat "docker build ${isTag ? '--no-cache' : ''} -t ${imageName} ."
                     }
@@ -179,6 +186,18 @@ pipeline {
                             )
                             exit 0
                         """
+                    } else if (isMain) {
+                        containerName = "react_main_${BUILD_NUMBER}"
+                        bat "docker stop ${containerName} 2>nul || exit 0"
+                        bat "docker rm ${containerName} 2>nul || exit 0"
+                        // Clean old main images
+                        bat """
+                            @echo off
+                            for /f "skip=3 delims=" %%a in ('docker images react-main --format "{{.Repository}}:{{.Tag}}" 2^>nul') do (
+                                docker rmi %%a 2>nul
+                            )
+                            exit 0
+                        """
                     } else if (isDev) {
                         containerName = "react_dev_${BUILD_NUMBER}"
                         bat "docker stop ${containerName} 2>nul || exit 0"
@@ -207,6 +226,8 @@ pipeline {
                     echo "✓ RELEASE ${env.TAG_NAME} - BUILD SUCCESSFUL"
                 } else if (isPR) {
                     echo "✓ PR-${env.CHANGE_ID} - VALIDATION PASSED"
+                } else if (isMain) {
+                    echo "✓ MAIN PIPELINE - BUILD SUCCESSFUL"
                 } else if (isDev) {
                     echo "✓ DEV PIPELINE - BUILD SUCCESSFUL"
                 } else {
@@ -220,6 +241,8 @@ pipeline {
                     echo "✗ RELEASE ${env.TAG_NAME} - BUILD FAILED"
                 } else if (isPR) {
                     echo "✗ PR-${env.CHANGE_ID} - VALIDATION FAILED"
+                } else if (isMain) {
+                    echo "✗ MAIN PIPELINE - BUILD FAILED"
                 } else if (isDev) {
                     echo "✗ DEV PIPELINE - BUILD FAILED"
                 } else {
