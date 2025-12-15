@@ -3,7 +3,8 @@ import './index.css';
 
 function App() {
   const [count, setCount] = useState(0);
-
+  
+  // Add Reset Feature
   const handleReset = () => {
     setCount(0);
   };
